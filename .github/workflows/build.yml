@@ -15,46 +15,25 @@ jobs:
           node-version: 18
           cache: npm
 
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: 17
+
       - name: Install dependencies
         run: npm install --legacy-peer-deps
 
-      - name: Install EAS CLI
-        run: npm install -g eas-cli
+      - name: Expo prebuild (gera projeto Android nativo)
+        run: npx expo prebuild --platform android --no-install
 
-      - name: Initialize EAS project
-        run: eas init --non-interactive --force
-        env:
-          EXPO_TOKEN: ${{ secrets.EXPO_TOKEN }}
-
-      - name: Generate Android Keystore
+      - name: Build APK debug
         run: |
-          keytool -genkeypair -v \
-            -keystore suas-estuda.keystore \
-            -alias suas-estuda \
-            -keyalg RSA \
-            -keysize 2048 \
-            -validity 10000 \
-            -storepass "SuasEstuda2024" \
-            -keypass "SuasEstuda2024" \
-            -dname "CN=SUAS Estuda, OU=App, O=SUAS Estuda, L=Brasil, ST=Brasil, C=BR"
-          echo '{
-            "android": {
-              "keystore": {
-                "keystorePath": "suas-estuda.keystore",
-                "keystorePassword": "SuasEstuda2024",
-                "keyAlias": "suas-estuda",
-                "keyPassword": "SuasEstuda2024"
-              }
-            }
-          }' > credentials.json
-
-      - name: Build APK
-        run: eas build --platform android --profile preview --non-interactive --local --output build/suas-estuda.apk
-        env:
-          EXPO_TOKEN: ${{ secrets.EXPO_TOKEN }}
+          cd android
+          chmod +x gradlew
+          ./gradlew assembleDebug --no-daemon
 
       - name: Upload APK
         uses: actions/upload-artifact@v4
         with:
-          name: suas-estuda-apk
-          path: build/suas-estuda.apk
+          name: suas-estuda-debug
+          path: android/app/build/outputs/apk/debug/app-debug.apk
