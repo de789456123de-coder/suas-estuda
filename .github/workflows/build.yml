@@ -56,11 +56,15 @@ jobs:
         run: |
           cd android
           chmod +x gradlew
-          ./gradlew assembleDebug --warning-mode none --info > /tmp/gradle.log 2>&1
-          EXIT=$?
+          echo "=== gradle-plugin/gradle.properties ==="
+          cat gradle-plugin/gradle.properties 2>/dev/null || echo "(nao encontrado)"
+          EXIT=0
+          ./gradlew assembleDebug --warning-mode none --info > /tmp/gradle.log 2>&1 || EXIT=$?
           if [ $EXIT -ne 0 ]; then
-            echo "=== DETALHES DO ERRO KOTLIN ==="
-            grep -A 20 "Caused by:\|Internal compiler error\|e: error:" /tmp/gradle.log | head -100
+            echo "=== DETALHES DO ERRO ==="
+            grep -A 20 "Caused by:\|Internal compiler error\|e: error:" /tmp/gradle.log | head -100 || true
+            echo "=== ULTIMAS 60 LINHAS DO LOG ==="
+            tail -60 /tmp/gradle.log
           fi
           exit $EXIT
 
