@@ -26,25 +26,43 @@ jobs:
       - name: Expo prebuild (gera projeto Android nativo)
         run: npx expo prebuild --platform android --no-install
 
-      - name: Configurar JVM para projeto Android e plugin Expo
+      - name: Debug - estrutura do plugin Expo
         run: |
-          JVM_OPTS='org.gradle.jvmargs=-Xmx4g -XX:MaxMetaspaceSize=1g -Dfile.encoding=UTF-8'
-          KOTLIN_OPTS='kotlin.compiler.execution.strategy=in-process'
+          echo "=== android/settings.gradle ==="
+          head -40 android/settings.gradle 2>/dev/null || head -40 android/settings.gradle.kts 2>/dev/null
+          echo ""
+          echo "=== gradle-plugin/build.gradle.kts ==="
+          cat android/gradle-plugin/build.gradle.kts 2>/dev/null || echo "(nao encontrado)"
+          echo ""
+          echo "=== gradle-plugin/settings-plugin/build.gradle.kts ==="
+          cat android/gradle-plugin/settings-plugin/build.gradle.kts 2>/dev/null || echo "(nao encontrado)"
+          echo ""
+          echo "=== Arquivos Kotlin gerados ==="
+          find android/gradle-plugin -name "*.kt" 2>/dev/null | head -20
 
-          # Projeto Android principal
-          echo "$JVM_OPTS" >> android/gradle.properties
-          echo "$KOTLIN_OPTS" >> android/gradle.properties
-
-          # Included build do plugin Expo (onde o Kotlin falha)
+      - name: Configurar JVM para Android e plugin Expo
+        run: |
+          JVM='org.gradle.jvmargs=-Xmx4g -Xss4m -XX:MaxMetaspaceSize=1g -Dfile.encoding=UTF-8'
+          KT='kotlin.compiler.execution.strategy=in-process'
+          echo "$JVM" >> android/gradle.properties
+          echo "$KT" >> android/gradle.properties
           mkdir -p android/gradle-plugin
-          echo "$JVM_OPTS" >> android/gradle-plugin/gradle.properties
-          echo "$KOTLIN_OPTS" >> android/gradle-plugin/gradle.properties
+          echo "$JVM" >> android/gradle-plugin/gradle.properties
+          echo "$KT" >> android/gradle-plugin/gradle.properties
 
       - name: Build APK debug
+        env:
+          KOTLIN_DAEMON_JVM_OPTIONS: "-Xmx2g -Xss4m -XX:MaxMetaspaceSize=512m"
         run: |
           cd android
           chmod +x gradlew
-          ./gradlew assembleDebug --warning-mode none
+          ./gradlew assembleDebug --warning-mode none --info > /tmp/gradle.log 2>&1
+          EXIT=$?
+          if [ $EXIT -ne 0 ]; then
+            echo "=== DETALHES DO ERRO KOTLIN ==="
+            grep -A 20 "Caused by:\|Internal compiler error\|e: error:" /tmp/gradle.log | head -100
+          fi
+          exit $EXIT
 
       - name: Upload APK
         uses: actions/upload-artifact@v4
