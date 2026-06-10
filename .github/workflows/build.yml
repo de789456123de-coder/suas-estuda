@@ -26,7 +26,7 @@ jobs:
       - name: Expo prebuild (gera projeto Android nativo)
         run: npx expo prebuild --platform android --no-install
 
-      - name: Configurar JVM e corrigir bug Kotlin FIR
+      - name: Configurar JVM e corrigir versoes Kotlin/KSP
         run: |
           JVM='org.gradle.jvmargs=-Xmx4g -Xss4m -XX:MaxMetaspaceSize=1g -Dfile.encoding=UTF-8'
           KT='kotlin.compiler.execution.strategy=in-process'
@@ -40,9 +40,15 @@ jobs:
           echo "$JVM" >> android/gradle-plugin/gradle.properties
           echo "$KT"  >> android/gradle-plugin/gradle.properties
 
-          # Corrigir bug FirIncompatibleClassExpressionChecker (Kotlin 2.x)
-          # O compilador Kotlin crasha ao inspecionar tipos de JARs sem PSI source.
-          # -Xskip-metadata-version-check suprime essa verificação.
+          # expo prebuild gera kotlinVersion=2.0.21, mas Expo SDK 56 exige >= 2.1.20
+          sed -i 's/kotlinVersion = "2\.0\.21"/kotlinVersion = "2.1.20"/' android/build.gradle
+          # Atualizar KSP para versão compatível com Kotlin 2.1.20
+          sed -i 's/2\.0\.21-1\.0\.[0-9]*/2.1.20-1.0.31/g' android/build.gradle
+
+          echo "=== kotlinVersion e KSP após patch ==="
+          grep -n "kotlinVersion\|symbol-processing\|ksp" android/build.gradle | head -10
+
+          # Corrigir bug FirIncompatibleClassExpressionChecker (Kotlin 2.x FIR)
           PATCH='tasks.withType<org.jetbrains.kotlin.gradle.tasks.KotlinCompile>().configureEach { kotlinOptions.freeCompilerArgs += listOf("-Xskip-metadata-version-check") }'
           for f in \
             android/gradle-plugin/settings-plugin/build.gradle.kts \
@@ -50,11 +56,10 @@ jobs:
             if [ -f "$f" ]; then
               echo "" >> "$f"
               echo "$PATCH" >> "$f"
-              echo "Patch aplicado: $f"
             fi
           done
 
-          # Init script global (cobre qualquer build incluído não mapeado acima)
+          # Init script global como fallback
           mkdir -p ~/.gradle/init.d
           cat > ~/.gradle/init.d/kotlin-fir-fix.gradle << 'EOF'
           allprojects {
