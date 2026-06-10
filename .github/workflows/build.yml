@@ -26,11 +26,16 @@ jobs:
       - name: Expo prebuild (gera projeto Android nativo)
         run: npx expo prebuild --platform android --no-install
 
+      - name: Configurar JVM e compilador Kotlin
+        run: |
+          echo "org.gradle.jvmargs=-Xmx4g -XX:MaxMetaspaceSize=1g -Dfile.encoding=UTF-8" >> android/gradle.properties
+          echo "kotlin.compiler.execution.strategy=in-process" >> android/gradle.properties
+
       - name: Build APK debug
         run: |
           cd android
           chmod +x gradlew
-          ./gradlew assembleDebug --no-daemon --warning-mode all --stacktrace
+          ./gradlew assembleDebug --no-daemon
 
       - name: Upload APK
         uses: actions/upload-artifact@v4
