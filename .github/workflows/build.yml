@@ -26,19 +26,25 @@ jobs:
       - name: Expo prebuild (gera projeto Android nativo)
         run: npx expo prebuild --platform android --no-install
 
-      - name: Configurar JVM e Kotlin (global + projeto)
+      - name: Configurar JVM para projeto Android e plugin Expo
         run: |
-          mkdir -p ~/.gradle
-          echo 'org.gradle.jvmargs=-Xmx4g -XX:MaxMetaspaceSize=1g -Dfile.encoding=UTF-8' >> ~/.gradle/gradle.properties
-          echo 'kotlin.compiler.execution.strategy=in-process' >> ~/.gradle/gradle.properties
-          echo 'org.gradle.jvmargs=-Xmx4g -XX:MaxMetaspaceSize=1g -Dfile.encoding=UTF-8' >> android/gradle.properties
-          echo 'kotlin.compiler.execution.strategy=in-process' >> android/gradle.properties
+          JVM_OPTS='org.gradle.jvmargs=-Xmx4g -XX:MaxMetaspaceSize=1g -Dfile.encoding=UTF-8'
+          KOTLIN_OPTS='kotlin.compiler.execution.strategy=in-process'
+
+          # Projeto Android principal
+          echo "$JVM_OPTS" >> android/gradle.properties
+          echo "$KOTLIN_OPTS" >> android/gradle.properties
+
+          # Included build do plugin Expo (onde o Kotlin falha)
+          mkdir -p android/gradle-plugin
+          echo "$JVM_OPTS" >> android/gradle-plugin/gradle.properties
+          echo "$KOTLIN_OPTS" >> android/gradle-plugin/gradle.properties
 
       - name: Build APK debug
         run: |
           cd android
           chmod +x gradlew
-          ./gradlew assembleDebug --no-daemon --warning-mode none
+          ./gradlew assembleDebug --warning-mode none
 
       - name: Upload APK
         uses: actions/upload-artifact@v4
