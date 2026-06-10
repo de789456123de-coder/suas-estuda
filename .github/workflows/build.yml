@@ -26,29 +26,49 @@ jobs:
       - name: Expo prebuild (gera projeto Android nativo)
         run: npx expo prebuild --platform android --no-install
 
-      - name: Debug - estrutura do plugin Expo
-        run: |
-          echo "=== android/settings.gradle ==="
-          head -40 android/settings.gradle 2>/dev/null || head -40 android/settings.gradle.kts 2>/dev/null
-          echo ""
-          echo "=== gradle-plugin/build.gradle.kts ==="
-          cat android/gradle-plugin/build.gradle.kts 2>/dev/null || echo "(nao encontrado)"
-          echo ""
-          echo "=== gradle-plugin/settings-plugin/build.gradle.kts ==="
-          cat android/gradle-plugin/settings-plugin/build.gradle.kts 2>/dev/null || echo "(nao encontrado)"
-          echo ""
-          echo "=== Arquivos Kotlin gerados ==="
-          find android/gradle-plugin -name "*.kt" 2>/dev/null | head -20
-
-      - name: Configurar JVM para Android e plugin Expo
+      - name: Configurar JVM e corrigir bug Kotlin FIR
         run: |
           JVM='org.gradle.jvmargs=-Xmx4g -Xss4m -XX:MaxMetaspaceSize=1g -Dfile.encoding=UTF-8'
           KT='kotlin.compiler.execution.strategy=in-process'
+
+          # Projeto Android principal
           echo "$JVM" >> android/gradle.properties
-          echo "$KT" >> android/gradle.properties
+          echo "$KT"  >> android/gradle.properties
+
+          # Included build do plugin Expo
           mkdir -p android/gradle-plugin
           echo "$JVM" >> android/gradle-plugin/gradle.properties
-          echo "$KT" >> android/gradle-plugin/gradle.properties
+          echo "$KT"  >> android/gradle-plugin/gradle.properties
+
+          # Corrigir bug FirIncompatibleClassExpressionChecker (Kotlin 2.x)
+          # O compilador Kotlin crasha ao inspecionar tipos de JARs sem PSI source.
+          # -Xskip-metadata-version-check suprime essa verificação.
+          PATCH='tasks.withType<org.jetbrains.kotlin.gradle.tasks.KotlinCompile>().configureEach { kotlinOptions.freeCompilerArgs += listOf("-Xskip-metadata-version-check") }'
+          for f in \
+            android/gradle-plugin/settings-plugin/build.gradle.kts \
+            android/gradle-plugin/build.gradle.kts; do
+            if [ -f "$f" ]; then
+              echo "" >> "$f"
+              echo "$PATCH" >> "$f"
+              echo "Patch aplicado: $f"
+            fi
+          done
+
+          # Init script global (cobre qualquer build incluído não mapeado acima)
+          mkdir -p ~/.gradle/init.d
+          cat > ~/.gradle/init.d/kotlin-fir-fix.gradle << 'EOF'
+          allprojects {
+              afterEvaluate {
+                  project.tasks.matching { t ->
+                      t.name.startsWith("compile") && t.name.endsWith("Kotlin")
+                  }.configureEach { t ->
+                      try {
+                          t.kotlinOptions.freeCompilerArgs += ["-Xskip-metadata-version-check"]
+                      } catch (Exception ignored) {}
+                  }
+              }
+          }
+          EOF
 
       - name: Build APK debug
         env:
@@ -56,15 +76,11 @@ jobs:
         run: |
           cd android
           chmod +x gradlew
-          echo "=== gradle-plugin/gradle.properties ==="
-          cat gradle-plugin/gradle.properties 2>/dev/null || echo "(nao encontrado)"
           EXIT=0
-          ./gradlew assembleDebug --warning-mode none --info > /tmp/gradle.log 2>&1 || EXIT=$?
+          ./gradlew assembleDebug --warning-mode none > /tmp/gradle.log 2>&1 || EXIT=$?
           if [ $EXIT -ne 0 ]; then
-            echo "=== DETALHES DO ERRO ==="
-            grep -A 20 "Caused by:\|Internal compiler error\|e: error:" /tmp/gradle.log | head -100 || true
-            echo "=== ULTIMAS 60 LINHAS DO LOG ==="
-            tail -60 /tmp/gradle.log
+            echo "=== ERRO ==="
+            grep -A 10 "Caused by:\|What went wrong:" /tmp/gradle.log | head -60 || true
           fi
           exit $EXIT
 
