@@ -2,7 +2,6 @@
   "expo": {
     "name": "SUAS Estuda",
     "slug": "suas-estuda",
-    "owner": "denisvidamor",
     "version": "1.0.0",
     "orientation": "portrait",
     "icon": "./assets/icon.png",

@@ -56,5 +56,5 @@ export async function getSimuladoScore(): Promise<{ score: number; total: number
 
 export async function resetAll(): Promise<void> {
   const keys = ['modulo1','modulo2','modulo3','modulo4'].map(id => KEY(id as ModuleId));
-  await AsyncStorage.multiRemove([...keys, SIMULADO_KEY]);
+  await Promise.all([...keys, SIMULADO_KEY].map(k => AsyncStorage.removeItem(k)));
 }
